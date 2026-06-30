@@ -1,0 +1,41 @@
+# ════════════════════════════════════════════════════════════════════════
+#  Call & Chat Summarizer — dependencies (verified working set)
+# ════════════════════════════════════════════════════════════════════════
+#
+#  IMPORTANT — install the torch stack first, matched to your CUDA, all from
+#  the SAME index (torch, torchvision and torchaudio versions must agree):
+#     CUDA 12.8 :  pip install torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+#     CPU only  :  pip install torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cpu
+#  then:   pip install -r requirements.txt
+#
+#  (With uv:  uv pip install torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+#             uv pip install -r requirements.txt)
+# ------------------------------------------------------------------------
+
+# ── deep learning / models ──────────────────────────────────────────────
+torch==2.11.0
+torchvision==0.26.0          # required by Gemma-4's multimodal processor (install from same CUDA index as torch)
+torchaudio==2.11.0           # speaker diarization / SpeechBrain (install from same CUDA index as torch)
+transformers==5.9.0
+accelerate==1.13.0
+tokenizers==0.22.2
+safetensors==0.7.0
+huggingface-hub==1.16.4
+
+# ── diarization + voice recognition (calls) ──────────────────────────────
+speechbrain==1.1.0           # ECAPA-TDNN speaker embeddings (who is speaking)
+scikit-learn==1.8.0          # agglomerative clustering for diarization
+
+# ── audio (Whisper input) ───────────────────────────────────────────────
+librosa==0.11.0
+soundfile==0.13.1
+numpy==2.4.4
+
+# ── image backend (Gemma-4 is a multimodal image-text-to-text processor) ─
+pillow==12.2.0
+
+# ── web service ─────────────────────────────────────────────────────────
+fastapi==0.136.3
+uvicorn[standard]==0.48.0
+python-multipart==0.0.29
+pydantic==2.13.4
