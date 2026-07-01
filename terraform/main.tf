@@ -223,6 +223,8 @@ resource "aws_cloudwatch_metric_alarm" "status_check" {
   statistic           = "Maximum"
   threshold           = 0
   alarm_description   = "EC2 instance/system status check failed."
+  alarm_actions       = [aws_sns_topic.alarms.arn]
+  ok_actions          = [aws_sns_topic.alarms.arn]
   dimensions = {
     InstanceId = aws_instance.this.id
   }
@@ -238,6 +240,8 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   statistic           = "Average"
   threshold           = 90
   alarm_description   = "Average CPU > 90% for 15 minutes."
+  alarm_actions       = [aws_sns_topic.alarms.arn]
+  ok_actions          = [aws_sns_topic.alarms.arn]
   dimensions = {
     InstanceId = aws_instance.this.id
   }
@@ -257,6 +261,8 @@ resource "aws_cloudwatch_metric_alarm" "gpu_mem_high" {
   threshold           = var.gpu_mem_alarm_threshold_mib
   alarm_description   = "GPU memory used > ${var.gpu_mem_alarm_threshold_mib} MiB on the ${var.gpu_name} — OOM early-warning (total 15360 MiB on T4)."
   treat_missing_data  = "notBreaching" # avoid false alarms during restarts/metric gaps
+  alarm_actions       = [aws_sns_topic.alarms.arn]
+  ok_actions          = [aws_sns_topic.alarms.arn]
   dimensions = {
     InstanceId = aws_instance.this.id
     name       = var.gpu_name

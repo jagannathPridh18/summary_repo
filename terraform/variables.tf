@@ -77,6 +77,12 @@ variable "ssh_allowed_cidr" {
   default     = "0.0.0.0/0"
 }
 
+variable "alarm_email" {
+  description = "Email subscribed to the SNS topic that receives CloudWatch alarm notifications (ALARM + OK). AWS sends a one-time confirmation email that must be clicked before alerts flow."
+  type        = string
+  default     = "udathak@gmail.com"
+}
+
 variable "gpu_mem_alarm_threshold_mib" {
   description = "Fire the GPU-memory alarm when nvidia_smi_memory_used exceeds this (MiB). T4 total = 15360; 14800 gives ~560MB OOM early-warning. This 3-model stack idles ~12905 and peaks ~13447 under a single call, so 14800 only trips on abnormal pressure (e.g. concurrent calls). Raise proportionally on a 24GB GPU (~23000)."
   type        = number
