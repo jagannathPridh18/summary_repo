@@ -1,0 +1,7 @@
+# Keep deployment scripts LF-only regardless of the OS they're committed from,
+# so bash / Terraform templatefile / systemd units don't get CRLF injected.
+*.sh   text eol=lf
+*.tpl  text eol=lf
+*.tf   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf

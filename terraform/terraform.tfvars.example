@@ -1,0 +1,15 @@
+# Copy to terraform.tfvars and adjust as needed. All values have sane
+# defaults in variables.tf — override only what you need.
+
+# region           = "ap-south-1"
+# instance_type    = "g5.xlarge"
+# domain           = "summary.chatbucket.chat"
+# acme_email       = "udathak@gmail.com"
+# git_ref          = "master"
+
+# Lock SSH to your IP for production, e.g.:
+# ssh_allowed_cidr = "203.0.113.4/32"
+
+# whisper-large-v3 and gemma-4-E2B-it are UNGATED, so a token is NOT
+# required. Provide one only to avoid anonymous download rate limits:
+# hf_token         = "hf_xxx"

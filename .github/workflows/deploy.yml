@@ -1,0 +1,152 @@
+name: Deploy
+
+# Production pipeline for the Call & Chat Summarizer. On push to master it runs
+# a CI gate (byte-compile) and only deploys if that gate passes. Infra itself is
+# managed by Terraform (see terraform/).
+#
+# Required GitHub repository secrets:
+#   EC2_HOST     Elastic IP / hostname of the instance  (terraform output public_ip)
+#   EC2_SSH_KEY  Contents of the generated private key   (terraform output private_key_path)
+#   EC2_USER     SSH user (optional, defaults to "ubuntu")
+#
+# Optional repository variable:
+#   APP_DIR      App directory on the host (defaults to /opt/call-chat-summarizer)
+
+on:
+  push:
+    branches: [master]
+    # Infra/docs-only changes don't affect the running app, so skip the
+    # deploy (and its service restart) when only these paths change.
+    paths-ignore:
+      - 'terraform/**'
+      - '**.md'
+      - '**.xlsx'
+      - '.gitattributes'
+      - '.gitignore'
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    name: CI gate (byte-compile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Byte-compile app
+        run: python -m compileall -q run.py summarizer
+
+  deploy:
+    name: Deploy to EC2
+    needs: ci # gate: deploy only runs if the CI job succeeds
+    runs-on: ubuntu-latest
+    # Production gate. The "production" GitHub Environment carries the
+    # protection rules (required reviewer + branch policy) configured in
+    # repo Settings -> Environments. Until a reviewer rule is added the
+    # environment exists but does not block; once added, each deploy to
+    # master pauses here for manual approval.
+    environment:
+      name: production
+      url: https://summary.chatbucket.chat
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 30m
+          script: |
+            set -euo pipefail
+            APP_DIR="${{ vars.APP_DIR || '/opt/call-chat-summarizer' }}"
+            REPO_DIR="$APP_DIR/repo"
+            VENV_DIR="$APP_DIR/venv"
+            SERVICE="$(basename "$APP_DIR").service"
+
+            echo "==> Recording current commit for rollback"
+            cd "$REPO_DIR"
+            git fetch --all --prune
+            git rev-parse HEAD > "$APP_DIR/.deploy_prev_sha"
+            echo "    last-good = $(cat "$APP_DIR/.deploy_prev_sha")"
+
+            echo "==> Updating to origin/master"
+            git reset --hard origin/master
+
+            echo "==> Syncing dependencies"
+            if [ -f requirements.lock.txt ]; then REQ=requirements.lock.txt; else REQ=requirements.txt; fi
+            "$VENV_DIR/bin/pip" install -r "$REQ"
+
+            echo "==> Restarting $SERVICE"
+            sudo systemctl restart "$SERVICE"
+            sleep 5
+            sudo systemctl is-active "$SERVICE"
+
+      - name: Health check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 15m
+          script: |
+            set -euo pipefail
+            PORT=8077
+            echo "==> Waiting for /health on 127.0.0.1:$PORT (Whisper + Gemma-4 reload on restart)"
+            for i in $(seq 1 90); do
+              if curl -fsS "http://127.0.0.1:$PORT/health" | grep -q '"status": *"ok"'; then
+                echo "Service healthy: $(curl -fsS http://127.0.0.1:$PORT/health)"
+                exit 0
+              fi
+              echo "  ...models still loading ($i)"; sleep 10
+            done
+            echo "Health check did not pass in time (models may still be loading)." >&2
+            exit 1
+
+      - name: Roll back on failed deploy
+        if: failure() # runs only when Deploy over SSH or Health check failed
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 20m
+          script: |
+            set -euo pipefail
+            APP_DIR="${{ vars.APP_DIR || '/opt/call-chat-summarizer' }}"
+            REPO_DIR="$APP_DIR/repo"
+            VENV_DIR="$APP_DIR/venv"
+            SERVICE="$(basename "$APP_DIR").service"
+            PORT=8077
+
+            if [ ! -s "$APP_DIR/.deploy_prev_sha" ]; then
+              echo "No recorded previous commit; cannot auto-roll back." >&2
+              exit 1
+            fi
+            PREV="$(cat "$APP_DIR/.deploy_prev_sha")"
+            echo "==> Deploy failed. Rolling back to last-good commit $PREV"
+            cd "$REPO_DIR"
+            git reset --hard "$PREV"
+
+            if [ -f requirements.lock.txt ]; then REQ=requirements.lock.txt; else REQ=requirements.txt; fi
+            "$VENV_DIR/bin/pip" install -r "$REQ"
+
+            sudo systemctl restart "$SERVICE"
+            sleep 5
+            echo "==> Verifying rolled-back service health"
+            for i in $(seq 1 90); do
+              if curl -fsS "http://127.0.0.1:$PORT/health" | grep -q '"status": *"ok"'; then
+                echo "Rolled back successfully to $PREV; service healthy."
+                exit 0
+              fi
+              echo "  ...recovering ($i)"; sleep 10
+            done
+            echo "ROLLBACK FAILED — service not healthy on $PREV. Manual intervention needed." >&2
+            exit 1
