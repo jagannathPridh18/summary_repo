@@ -242,3 +242,25 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
     InstanceId = aws_instance.this.id
   }
 }
+
+# GPU-memory OOM early-warning. The CW agent (namespace CallChatSummarizer,
+# see user_data.sh.tpl) ships nvidia_smi_memory_used with dimensions
+# InstanceId/name/index/arch — all four must match the published metric.
+resource "aws_cloudwatch_metric_alarm" "gpu_mem_high" {
+  alarm_name          = "${var.project_name}-gpu-mem-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "nvidia_smi_memory_used"
+  namespace           = "CallChatSummarizer"
+  period              = 60
+  statistic           = "Maximum"
+  threshold           = var.gpu_mem_alarm_threshold_mib
+  alarm_description   = "GPU memory used > ${var.gpu_mem_alarm_threshold_mib} MiB on the ${var.gpu_name} — OOM early-warning (total 15360 MiB on T4)."
+  treat_missing_data  = "notBreaching" # avoid false alarms during restarts/metric gaps
+  dimensions = {
+    InstanceId = aws_instance.this.id
+    name       = var.gpu_name
+    index      = "0"
+    arch       = var.gpu_arch
+  }
+}

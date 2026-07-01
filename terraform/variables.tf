@@ -77,6 +77,24 @@ variable "ssh_allowed_cidr" {
   default     = "0.0.0.0/0"
 }
 
+variable "gpu_mem_alarm_threshold_mib" {
+  description = "Fire the GPU-memory alarm when nvidia_smi_memory_used exceeds this (MiB). T4 total = 15360; 14800 gives ~560MB OOM early-warning. This 3-model stack idles ~12905 and peaks ~13447 under a single call, so 14800 only trips on abnormal pressure (e.g. concurrent calls). Raise proportionally on a 24GB GPU (~23000)."
+  type        = number
+  default     = 14800
+}
+
+variable "gpu_name" {
+  description = "GPU model as reported in the CW-agent 'name' dimension. Must match for the alarm to bind: 'Tesla T4' (g4dn), 'NVIDIA A10G' (g5), 'NVIDIA L4' (g6)."
+  type        = string
+  default     = "Tesla T4"
+}
+
+variable "gpu_arch" {
+  description = "GPU architecture in the CW-agent 'arch' dimension: Turing (T4), Ampere (A10G), Ada Lovelace (L4)."
+  type        = string
+  default     = "Turing"
+}
+
 variable "log_retention_days" {
   description = "Retention (in days) for the CloudWatch log groups the CW agent ships to. Keeps storage cost bounded."
   type        = number
